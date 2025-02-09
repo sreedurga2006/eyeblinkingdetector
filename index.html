@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Alert System</title>
+    <style>
+        /* Style the webcam and label display */
+        #webcam-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        #label-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Driver Alert System</h1>
+    <button type="button" onclick="init()">Start</button>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <!-- Load TensorFlow.js and Teachable Machine Image model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <script type="text/javascript">
+        const URL = "./static/my_model/"; // Path to your model files in Flask's static directory
+
+        let model, webcam, labelContainer, maxPredictions;
+        let lastClosedTime = 0; // Track the time when eyes are closed
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // Load the model and metadata
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Set up the webcam
+            const flip = true; 
+            webcam = new tmImage.Webcam(200, 200, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // Append webcam to DOM
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop() {
+            webcam.update(); // Update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        // Run prediction
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+
+            let isEyesClosed = false;
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+
+                // If eyes are closed, track the time
+                if (prediction[i].className === 'Eyes Closed' && prediction[i].probability > 0.8) {
+                    if (Date.now() - lastClosedTime > 5000) { // 5 seconds
+                        triggerAlarm();
+                    }
+                    isEyesClosed = true;
+                    lastClosedTime = Date.now();
+                }
+            }
+
+            // Reset if eyes are open
+            if (!isEyesClosed) {
+                lastClosedTime = 0;
+            }
+        }
+
+        // Trigger the alarm if eyes are closed for 5 seconds
+        function triggerAlarm() {
+            alert("You have been asleep! Wake up!");
+            // You can also play a sound or redirect to another page for a more alarming experience.
+        }
+    </script>
+</body>
+</html>
